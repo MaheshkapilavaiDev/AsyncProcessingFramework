@@ -2,18 +2,18 @@ package com.asyncprocessingframework.dto;
 
 public class EmailRequest {
 
-	private String email;
+	private String to;
 
 	private String subject;
 
 	private String message;
 
-	public String getEmail() {
-		return email;
+	public String getTo() {
+		return to;
 	}
 
-	public void setEmail(String email) {
-		this.email = email;
+	public void setTo(String to) {
+		this.to = to;
 	}
 
 	public String getSubject() {

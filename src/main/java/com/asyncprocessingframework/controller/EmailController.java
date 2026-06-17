@@ -1,13 +1,14 @@
 package com.asyncprocessingframework.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.asyncprocessingframework.component.EmailProcessor;
 import com.asyncprocessingframework.dto.EmailRequest;
+import com.asyncprocessingframework.service.EmailService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,14 +18,13 @@ import lombok.RequiredArgsConstructor;
 public class EmailController {
 
 	@Autowired
-    private  EmailProcessor emailProcessor;
+	private EmailService emailService;
 
-    @PostMapping("/send")
-    public String sendEmail(
-            @RequestBody EmailRequest request) {
+	@PostMapping("/send")
+	public ResponseEntity<String> sendEmail(@RequestBody EmailRequest request) {
 
-        emailProcessor.sendEmail(request);
+		Long jobId = emailService.sendEmail(request);
 
-        return "Email Request Accepted";
-    }
+		return ResponseEntity.ok("Email sending started. Job Id : " + jobId);
+	}
 }
