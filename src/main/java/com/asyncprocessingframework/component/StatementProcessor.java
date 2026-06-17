@@ -63,6 +63,14 @@ public class StatementProcessor {
 
             job.setStatus(JobStatus.RUNNING);
             jobRepository.save(job);
+            
+            // this black is used to check CancelJob Api working or not
+            
+           /* try {
+                Thread.sleep(10000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }*/
 
             Customer customer = customerRepository.findById(customerId)
                     .orElseThrow(() -> new RuntimeException("Customer not found"));
@@ -82,6 +90,7 @@ public class StatementProcessor {
                     folderPath + "/customer_" + customerId + "_" + jobId + ".pdf";
 
             auditService.log(jobId, "STATEMENT", "STARTED", "Generation started");
+            
 
             Document document = new Document();
             PdfWriter.getInstance(document, new FileOutputStream(filePath));
