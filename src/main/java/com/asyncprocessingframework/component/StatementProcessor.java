@@ -20,108 +20,122 @@ import com.asyncprocessingframework.repository.AccountRepository;
 import com.asyncprocessingframework.repository.AsyncJobRepository;
 import com.asyncprocessingframework.repository.CustomerRepository;
 import com.asyncprocessingframework.repository.TransactionRepository;
+import com.asyncprocessingframework.service.AuditService;
+
 import com.lowagie.text.Document;
 import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
 
-import lombok.RequiredArgsConstructor;
-
 @Component
-@RequiredArgsConstructor
 public class StatementProcessor {
 
-	@Autowired
-	private AsyncJobRepository jobRepository;
+    @Autowired
+    private AsyncJobRepository jobRepository;
 
-	@Autowired
-	private TransactionRepository transactionRepository;
+    @Autowired
+    private TransactionRepository transactionRepository;
 
-	@Autowired
-	private CustomerRepository customerRepository;
+    @Autowired
+    private CustomerRepository customerRepository;
 
-	@Autowired
-	private AccountRepository accountRepository;
+    @Autowired
+    private AccountRepository accountRepository;
 
-	@Value("${statement.storage.path}")
-	private String folderPath;
+    @Autowired
+    private AuditService auditService;
 
-	@Async("bankExecutor")
-	public CompletableFuture<Void> generateStatement(Long customerId, Long jobId) {
+    @Value("${statement.storage.path}")
+    private String folderPath;
 
-		AsyncJob job = jobRepository.findById(jobId).orElseThrow(() -> new RuntimeException("Job not found"));
+    @Async("bankExecutor")
+    public CompletableFuture<Void> generateStatement(Long customerId, Long jobId) {
 
-		try {
+        AsyncJob job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new RuntimeException("Job not found"));
 
-			job.setStatus(JobStatus.RUNNING);
-			jobRepository.save(job);
+        try {
 
-			Customer customer = customerRepository.findById(customerId)
-					.orElseThrow(() -> new RuntimeException("Customer not found"));
+            //CANCEL CHECK 
+            if (job.getStatus() == JobStatus.CANCELLED) {
+                auditService.log(jobId, "STATEMENT", "CANCELLED", "Job cancelled before start");
+                return CompletableFuture.completedFuture(null);
+            }
 
-			Account account = accountRepository.findByCustomerCustomerId(customerId)
-					.orElseThrow(() -> new RuntimeException("Account not found"));
+            job.setStatus(JobStatus.RUNNING);
+            jobRepository.save(job);
 
-			List<Transaction> transactions = transactionRepository.findByAccountAccountId(account.getAccountId());
+            Customer customer = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("Customer not found"));
 
-			File folder = new File(folderPath);
+            Account account = accountRepository.findByCustomerCustomerId(customerId)
+                    .orElseThrow(() -> new RuntimeException("Account not found"));
 
-			if (!folder.exists()) {
-				folder.mkdirs();
-			}
+            List<Transaction> transactions =
+                    transactionRepository.findByAccountAccountId(account.getAccountId());
 
-			String filePath = folderPath + "/customer_" + customerId + ".pdf";
+            File folder = new File(folderPath);
+            if (!folder.exists()) {
+                folder.mkdirs();
+            }
 
-			Document document = new Document();
+            String filePath =
+                    folderPath + "/customer_" + customerId + "_" + jobId + ".pdf";
 
-			PdfWriter.getInstance(document, new FileOutputStream(filePath));
+            auditService.log(jobId, "STATEMENT", "STARTED", "Generation started");
 
-			document.open();
+            Document document = new Document();
+            PdfWriter.getInstance(document, new FileOutputStream(filePath));
+            document.open();
 
-			document.add(new Paragraph("BANK STATEMENT"));
-			document.add(new Paragraph(" "));
-			document.add(new Paragraph("Generated On : " + LocalDateTime.now()));
+            document.add(new Paragraph("BANK STATEMENT"));
+            document.add(new Paragraph("Generated On : " + LocalDateTime.now()));
+            document.add(new Paragraph("Customer Name : " + customer.getCustomerName()));
+            document.add(new Paragraph("Email : " + customer.getEmail()));
+            document.add(new Paragraph("Mobile : " + customer.getMobile()));
+            document.add(new Paragraph("Account Number : " + account.getAccountNumber()));
+            document.add(new Paragraph("Account Type : " + account.getAccountType()));
+            document.add(new Paragraph("Balance : " + account.getBalance()));
 
-			document.add(new Paragraph("Customer Name : " + customer.getCustomerName()));
+            document.add(new Paragraph("------------ Transactions ------------"));
 
-			document.add(new Paragraph("Email : " + customer.getEmail()));
+            for (Transaction tx : transactions) {
 
-			document.add(new Paragraph("Mobile : " + customer.getMobile()));
+                //CANCEL CHECK
+                AsyncJob latestJob = jobRepository.findById(jobId).orElseThrow();
 
-			document.add(new Paragraph("Account Number : " + account.getAccountNumber()));
+                if (latestJob.getStatus() == JobStatus.CANCELLED) {
+                    document.close();
+                    auditService.log(jobId, "STATEMENT", "CANCELLED", "Job cancelled during execution");
+                    return CompletableFuture.completedFuture(null);
+                }
 
-			document.add(new Paragraph("Account Type : " + account.getAccountType()));
+                document.add(new Paragraph(
+                        tx.getTransactionDate() + " | " +
+                        tx.getTransactionType() + " | " +
+                        tx.getAmount()));
+            }
 
-			document.add(new Paragraph("Balance : " + account.getBalance()));
+            document.close();
 
-			document.add(new Paragraph(" "));
-			document.add(new Paragraph("------------ Transactions ------------"));
+            job.setStatus(JobStatus.COMPLETED);
+            job.setResultMessage(filePath);
+            job.setEndTime(LocalDateTime.now());
+            jobRepository.save(job);
 
-			for (Transaction tx : transactions) {
+            auditService.log(jobId, "STATEMENT", "SUCCESS", filePath);
 
-				document.add(new Paragraph(
-						tx.getTransactionDate() + " | " + tx.getTransactionType() + " | " + tx.getAmount()));
-			}
+        } catch (Exception ex) {
 
-			document.close();
+            job.setStatus(JobStatus.FAILED);
+            job.setErrorMessage(ex.getMessage());
+            job.setEndTime(LocalDateTime.now());
+            jobRepository.save(job);
 
-			job.setStatus(JobStatus.COMPLETED);
-			job.setResultMessage(filePath);
-			job.setEndTime(LocalDateTime.now());
+            auditService.log(jobId, "STATEMENT", "FAILED", ex.getMessage());
 
-			jobRepository.save(job);
+            throw new RuntimeException("Statement generation failed", ex);
+        }
 
-		} catch (Exception ex) {
-
-			job.setStatus(JobStatus.FAILED);
-			job.setErrorMessage(ex.getMessage());
-			job.setEndTime(LocalDateTime.now());
-
-			jobRepository.save(job);
-
-			throw new RuntimeException(ex);
-		}
-
-		return CompletableFuture.completedFuture(null);
-	}
-
+        return CompletableFuture.completedFuture(null);
+    }
 }

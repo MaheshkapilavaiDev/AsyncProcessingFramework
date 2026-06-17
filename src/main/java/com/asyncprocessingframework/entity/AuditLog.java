@@ -13,18 +13,20 @@ import jakarta.persistence.Table;
 @Table(name="audit_logs")
 public class AuditLog {
 	
-	@Id
+
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "action")
+    private Long jobId;
+
     private String action;
 
-    @Column(name = "performed_by")
-    private String performedBy;
+    private String status;
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt;
+    private String message;
+
+    private LocalDateTime timestamp;
 
 	public Long getId() {
 		return id;
@@ -32,6 +34,14 @@ public class AuditLog {
 
 	public void setId(Long id) {
 		this.id = id;
+	}
+
+	public Long getJobId() {
+		return jobId;
+	}
+
+	public void setJobId(Long jobId) {
+		this.jobId = jobId;
 	}
 
 	public String getAction() {
@@ -42,22 +52,29 @@ public class AuditLog {
 		this.action = action;
 	}
 
-	public String getPerformedBy() {
-		return performedBy;
+	public String getStatus() {
+		return status;
 	}
 
-	public void setPerformedBy(String performedBy) {
-		this.performedBy = performedBy;
+	public void setStatus(String status) {
+		this.status = status;
 	}
 
-	public LocalDateTime getCreatedAt() {
-		return createdAt;
+	public String getMessage() {
+		return message;
 	}
 
-	public void setCreatedAt(LocalDateTime createdAt) {
-		this.createdAt = createdAt;
+	public void setMessage(String message) {
+		this.message = message;
+	}
+
+	public LocalDateTime getTimestamp() {
+		return timestamp;
+	}
+
+	public void setTimestamp(LocalDateTime timestamp) {
+		this.timestamp = timestamp;
 	}
     
     
-
 }
